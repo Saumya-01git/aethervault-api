@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const authRoutes = require('./routes/authRoutes');
 
 dotenv.config();
 
@@ -14,7 +15,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Base Route / Health Check
+// Routes
+app.use('/api/auth', authRoutes);
+
+// Health Check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
