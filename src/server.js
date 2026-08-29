@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const authRoutes = require('./routes/authRoutes');
+const fileRoutes = require('./routes/fileRoutes');
 
 dotenv.config();
 
@@ -15,8 +17,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve uploaded files statically in local dev
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/files', fileRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
