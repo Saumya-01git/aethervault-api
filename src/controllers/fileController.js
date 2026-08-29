@@ -168,3 +168,61 @@ exports.listFiles = async (req, res) => {
     });
   }
 };
+
+// Rename or Move File (PATCH /api/files/:id)
+exports.updateFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, folderId } = req.body;
+
+    const file = db.findFileById(id);
+
+    if (!file || file.ownerId !== req.user.id) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'File not found or access denied.' }
+      });
+    }
+
+    const updates = {};
+    if (name !== undefined) updates.name = name.trim();
+    if (folderId !== undefined) updates.folderId = folderId;
+
+    const updatedFile = db.updateFile(id, updates);
+
+    return res.json({
+      message: 'File updated successfully',
+      file: updatedFile
+    });
+  } catch (error) {
+    console.error('Update File Error:', error);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Failed to update file.' }
+    });
+  }
+};
+
+// Soft Delete File (DELETE /api/files/:id)
+exports.deleteFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = db.findFileById(id);
+
+    if (!file || file.ownerId !== req.user.id) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'File not found or access denied.' }
+      });
+    }
+
+    db.softDeleteFile(id);
+
+    return res.json({
+      message: 'File moved to trash successfully',
+      fileId: id
+    });
+  } catch (error) {
+    console.error('Delete File Error:', error);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Failed to delete file.' }
+    });
+  }
+};

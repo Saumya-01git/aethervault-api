@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const fileRoutes = require('./routes/fileRoutes');
+const folderRoutes = require('./routes/folderRoutes');
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/folders', folderRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
