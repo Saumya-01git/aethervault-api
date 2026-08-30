@@ -23,14 +23,7 @@ app.use(express.json());
 // Serve uploaded files statically in local dev
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/folders', folderRoutes);
-app.use('/api/shares', shareRoutes);
-app.use('/api', searchRoutes);
-
-// Health Check
+// Health Check (Public route - defined before middleware routes)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -38,6 +31,13 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/folders', folderRoutes);
+app.use('/api/shares', shareRoutes);
+app.use('/api', searchRoutes);
 
 // Start Server
 app.listen(PORT, () => {
