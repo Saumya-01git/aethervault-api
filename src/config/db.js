@@ -4,6 +4,7 @@ const files = [];
 const folders = [];
 const shares = [];
 const linkShares = [];
+const stars = [];
 
 module.exports = {
   users,
@@ -11,6 +12,7 @@ module.exports = {
   folders,
   shares,
   linkShares,
+  stars,
 
   // User operations
   findUserByEmail: (email) => users.find(u => u.email.toLowerCase() === email.toLowerCase()),
@@ -120,5 +122,76 @@ module.exports = {
       return linkShares.splice(index, 1)[0];
     }
     return null;
+  },
+
+  // Star / Favorite operations
+  addStar: (userId, resourceType, resourceId) => {
+    const exists = stars.some(s => s.userId === userId && s.resourceType === resourceType && s.resourceId === resourceId);
+    if (!exists) {
+      const entry = { userId, resourceType, resourceId, createdAt: new Date().toISOString() };
+      stars.push(entry);
+      return entry;
+    }
+    return null;
+  },
+  removeStar: (userId, resourceType, resourceId) => {
+    const index = stars.findIndex(s => s.userId === userId && s.resourceType === resourceType && s.resourceId === resourceId);
+    if (index !== -1) {
+      return stars.splice(index, 1)[0];
+    }
+    return null;
+  },
+  getStarsByUser: (userId) => stars.filter(s => s.userId === userId),
+
+  // Search & Filter helper with pagination
+  searchUserResources: (ownerId, { q, type, starred, limit = 20, offset = 0 }) => {
+    const userStarredIds = new Set(stars.filter(s => s.userId === ownerId).map(s => s.resourceId));
+
+    let matchedFiles = files.filter(f => f.ownerId === ownerId && !f.isDeleted);
+    let matchedFolders = folders.filter(f => f.ownerId === ownerId && !f.isDeleted);
+
+    // Query text match (case-insensitive)
+    if (q && q.trim() !== '') {
+      const queryLower = q.trim().toLowerCase();
+      matchedFiles = matchedFiles.filter(f => f.name.toLowerCase().includes(queryLower));
+      matchedFolders = matchedFolders.filter(f => f.name.toLowerCase().includes(queryLower));
+    }
+
+    // Type match (e.g. image, pdf, folder)
+    if (type) {
+      const typeLower = type.toLowerCase();
+      matchedFiles = matchedFiles.filter(f => f.mimeType && f.mimeType.toLowerCase().includes(typeLower));
+      if (typeLower !== 'folder') {
+        matchedFolders = []; // Exclude folders if specific file mime type requested
+      }
+    }
+
+    // Starred filter
+    if (starred === 'true' || starred === true) {
+      matchedFiles = matchedFiles.filter(f => userStarredIds.has(f.id));
+      matchedFolders = matchedFolders.filter(f => userStarredIds.has(f.id));
+    }
+
+    // Mark starred status on results
+    const resultsFiles = matchedFiles.map(f => ({ ...f, isStarred: userStarredIds.has(f.id) }));
+    const resultsFolders = matchedFolders.map(f => ({ ...f, isStarred: userStarredIds.has(f.id) }));
+
+    const totalFiles = resultsFiles.length;
+    const totalFolders = resultsFolders.length;
+
+    // Apply pagination
+    const paginatedFiles = resultsFiles.slice(Number(offset), Number(offset) + Number(limit));
+    const paginatedFolders = resultsFolders.slice(Number(offset), Number(offset) + Number(limit));
+
+    return {
+      files: paginatedFiles,
+      folders: paginatedFolders,
+      pagination: {
+        limit: Number(limit),
+        offset: Number(offset),
+        totalFiles,
+        totalFolders
+      }
+    };
   }
 };
