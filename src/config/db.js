@@ -2,11 +2,15 @@
 const users = [];
 const files = [];
 const folders = [];
+const shares = [];
+const linkShares = [];
 
 module.exports = {
   users,
   files,
   folders,
+  shares,
+  linkShares,
 
   // User operations
   findUserByEmail: (email) => users.find(u => u.email.toLowerCase() === email.toLowerCase()),
@@ -61,13 +65,11 @@ module.exports = {
       folder.isDeleted = true;
       folder.deletedAt = new Date().toISOString();
 
-      // Soft delete child files
       files.filter(f => f.folderId === id).forEach(f => {
         f.isDeleted = true;
         f.deletedAt = new Date().toISOString();
       });
 
-      // Recursively soft delete subfolders
       folders.filter(f => f.parentId === id).forEach(f => {
         module.exports.softDeleteFolder(f.id);
       });
@@ -75,7 +77,7 @@ module.exports = {
     return folder;
   },
 
-  // Helper: Build breadcrumbs path
+  // Breadcrumbs helper
   getBreadcrumbs: (folderId, ownerId) => {
     const path = [];
     let currentId = folderId;
@@ -88,5 +90,35 @@ module.exports = {
     }
 
     return path;
+  },
+
+  // Per-User Share operations (ACL)
+  createShare: (shareData) => {
+    shares.push(shareData);
+    return shareData;
+  },
+  findSharesByResource: (resourceType, resourceId) => shares.filter(s => s.resourceType === resourceType && s.resourceId === resourceId),
+  findShareById: (id) => shares.find(s => s.id === id),
+  deleteShare: (id) => {
+    const index = shares.findIndex(s => s.id === id);
+    if (index !== -1) {
+      return shares.splice(index, 1)[0];
+    }
+    return null;
+  },
+
+  // Public Link Share operations
+  createLinkShare: (linkData) => {
+    linkShares.push(linkData);
+    return linkData;
+  },
+  findLinkShareByToken: (token) => linkShares.find(l => l.token === token),
+  findLinkShareById: (id) => linkShares.find(l => l.id === id),
+  deleteLinkShare: (id) => {
+    const index = linkShares.findIndex(l => l.id === id);
+    if (index !== -1) {
+      return linkShares.splice(index, 1)[0];
+    }
+    return null;
   }
 };
