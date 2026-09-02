@@ -5,6 +5,7 @@ const folders = [];
 const shares = [];
 const linkShares = [];
 const stars = [];
+const fileVersions = [];
 
 module.exports = {
   users,
@@ -13,6 +14,7 @@ module.exports = {
   shares,
   linkShares,
   stars,
+  fileVersions,
 
   // User operations
   findUserByEmail: (email) => users.find(u => u.email.toLowerCase() === email.toLowerCase()),
@@ -150,48 +152,96 @@ module.exports = {
     let matchedFiles = files.filter(f => f.ownerId === ownerId && !f.isDeleted);
     let matchedFolders = folders.filter(f => f.ownerId === ownerId && !f.isDeleted);
 
-    // Query text match (case-insensitive)
     if (q && q.trim() !== '') {
       const queryLower = q.trim().toLowerCase();
       matchedFiles = matchedFiles.filter(f => f.name.toLowerCase().includes(queryLower));
       matchedFolders = matchedFolders.filter(f => f.name.toLowerCase().includes(queryLower));
     }
 
-    // Type match (e.g. image, pdf, folder)
     if (type) {
       const typeLower = type.toLowerCase();
       matchedFiles = matchedFiles.filter(f => f.mimeType && f.mimeType.toLowerCase().includes(typeLower));
       if (typeLower !== 'folder') {
-        matchedFolders = []; // Exclude folders if specific file mime type requested
+        matchedFolders = [];
       }
     }
 
-    // Starred filter
     if (starred === 'true' || starred === true) {
       matchedFiles = matchedFiles.filter(f => userStarredIds.has(f.id));
       matchedFolders = matchedFolders.filter(f => userStarredIds.has(f.id));
     }
 
-    // Mark starred status on results
     const resultsFiles = matchedFiles.map(f => ({ ...f, isStarred: userStarredIds.has(f.id) }));
     const resultsFolders = matchedFolders.map(f => ({ ...f, isStarred: userStarredIds.has(f.id) }));
 
-    const totalFiles = resultsFiles.length;
-    const totalFolders = resultsFolders.length;
-
-    // Apply pagination
-    const paginatedFiles = resultsFiles.slice(Number(offset), Number(offset) + Number(limit));
-    const paginatedFolders = resultsFolders.slice(Number(offset), Number(offset) + Number(limit));
-
     return {
-      files: paginatedFiles,
-      folders: paginatedFolders,
+      files: resultsFiles.slice(Number(offset), Number(offset) + Number(limit)),
+      folders: resultsFolders.slice(Number(offset), Number(offset) + Number(limit)),
       pagination: {
         limit: Number(limit),
         offset: Number(offset),
-        totalFiles,
-        totalFolders
+        totalFiles: resultsFiles.length,
+        totalFolders: resultsFolders.length
       }
     };
+  },
+
+  // Trash & Restore Operations
+  getTrashItems: (ownerId) => {
+    const deletedFiles = files.filter(f => f.ownerId === ownerId && f.isDeleted);
+    const deletedFolders = folders.filter(f => f.ownerId === ownerId && f.isDeleted);
+    return { files: deletedFiles, folders: deletedFolders };
+  },
+
+  restoreItem: (resourceType, resourceId, ownerId) => {
+    if (resourceType === 'file') {
+      const file = files.find(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
+      if (file) {
+        file.isDeleted = false;
+        delete file.deletedAt;
+        return file;
+      }
+    } else if (resourceType === 'folder') {
+      const folder = folders.find(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
+      if (folder) {
+        folder.isDeleted = false;
+        delete folder.deletedAt;
+        // Restore child files and subfolders
+        files.filter(f => f.folderId === resourceId).forEach(f => {
+          f.isDeleted = false;
+          delete f.deletedAt;
+        });
+        folders.filter(f => f.parentId === resourceId).forEach(f => {
+          module.exports.restoreItem('folder', f.id, ownerId);
+        });
+        return folder;
+      }
+    }
+    return null;
+  },
+
+  purgeItem: (resourceType, resourceId, ownerId) => {
+    if (resourceType === 'file') {
+      const idx = files.findIndex(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
+      if (idx !== -1) return files.splice(idx, 1)[0];
+    } else if (resourceType === 'folder') {
+      const idx = folders.findIndex(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
+      if (idx !== -1) {
+        const deleted = folders.splice(idx, 1)[0];
+        // Delete child files
+        for (let i = files.length - 1; i >= 0; i--) {
+          if (files[i].folderId === resourceId) files.splice(i, 1);
+        }
+        return deleted;
+      }
+    }
+    return null;
+  },
+
+  // File Versioning Operations
+  getFileVersions: (fileId) => fileVersions.filter(v => v.fileId === fileId),
+  addFileVersion: (versionData) => {
+    fileVersions.push(versionData);
+    return versionData;
   }
 };
