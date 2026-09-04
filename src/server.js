@@ -8,6 +8,7 @@ const folderRoutes = require('./routes/folderRoutes');
 const shareRoutes = require('./routes/shareRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const trashRoutes = require('./routes/trashRoutes');
+const activityRoutes = require('./routes/activityRoutes');
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/shares', shareRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', trashRoutes);
+app.use('/api', activityRoutes);
 
 // Start Server
 app.listen(PORT, () => {

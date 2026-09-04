@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const storageService = require('../config/storage');
 
 // Search Endpoint (GET /api/search?q=&type=&owner=&starred=&limit=&offset=)
 exports.search = async (req, res) => {
@@ -16,7 +17,8 @@ exports.search = async (req, res) => {
     return res.json({
       query: q || null,
       filters: { type: type || null, starred: starred || false },
-      ...searchResults
+      ...searchResults,
+      files: storageService.attachDownloadUrl(searchResults.files)
     });
   } catch (error) {
     console.error('Search Error:', error);
@@ -95,7 +97,7 @@ exports.getStarred = async (req, res) => {
     });
 
     return res.json({
-      starredFiles,
+      starredFiles: storageService.attachDownloadUrl(starredFiles),
       starredFolders
     });
   } catch (error) {

@@ -159,8 +159,10 @@ exports.getFile = async (req, res) => {
 // List User Files
 exports.listFiles = async (req, res) => {
   try {
-    const files = db.findFilesByOwner(req.user.id);
-    return res.json({ files });
+    const rawFiles = db.findFilesByOwner(req.user.id);
+    const filesWithUrls = storageService.attachDownloadUrl(rawFiles);
+    const decorated = db.attachStarState(req.user.id, filesWithUrls, []);
+    return res.json({ files: decorated.files });
   } catch (error) {
     console.error('List Files Error:', error);
     return res.status(500).json({

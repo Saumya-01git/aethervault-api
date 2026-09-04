@@ -6,6 +6,7 @@ const shares = [];
 const linkShares = [];
 const stars = [];
 const fileVersions = [];
+const activityLogs = [];
 
 module.exports = {
   users,
@@ -15,6 +16,25 @@ module.exports = {
   linkShares,
   stars,
   fileVersions,
+  activityLogs,
+
+  // Audit Activity Logging
+  logActivity: (userId, action, resourceName = '', details = '') => {
+    const entry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      userId,
+      action, // e.g. 'UPLOAD_FILE', 'CREATE_FOLDER', 'DELETE_FILE', 'RESTORE_ITEM', 'STAR_ITEM', 'UPDATE_PROFILE'
+      resourceName,
+      details,
+      timestamp: new Date().toISOString()
+    };
+    activityLogs.unshift(entry);
+    return entry;
+  },
+
+  getActivityLogs: (userId, limit = 50) => {
+    return activityLogs.filter(log => log.userId === userId).slice(0, limit);
+  },
 
   // User operations
   findUserByEmail: (email) => users.find(u => u.email.toLowerCase() === email.toLowerCase()),
@@ -34,6 +54,9 @@ module.exports = {
   // File operations
   createFile: (fileData) => {
     files.push(fileData);
+    if (fileData.ownerId) {
+      module.exports.logActivity(fileData.ownerId, 'UPLOAD_FILE', fileData.name, `Uploaded file (${(fileData.sizeBytes / 1024).toFixed(1)} KB)`);
+    }
     return fileData;
   },
   findFileById: (id) => files.find(f => f.id === id && !f.isDeleted),
@@ -51,6 +74,7 @@ module.exports = {
     if (file) {
       file.isDeleted = true;
       file.deletedAt = new Date().toISOString();
+      module.exports.logActivity(file.ownerId, 'DELETE_FILE', file.name, 'Moved file to Trash');
     }
     return file;
   },
@@ -58,6 +82,9 @@ module.exports = {
   // Folder operations
   createFolder: (folderData) => {
     folders.push(folderData);
+    if (folderData.ownerId) {
+      module.exports.logActivity(folderData.ownerId, 'CREATE_FOLDER', folderData.name, 'Created new folder');
+    }
     return folderData;
   },
   findFolderById: (id) => folders.find(f => f.id === id && !f.isDeleted),
@@ -75,6 +102,7 @@ module.exports = {
     if (folder) {
       folder.isDeleted = true;
       folder.deletedAt = new Date().toISOString();
+      module.exports.logActivity(folder.ownerId, 'DELETE_FOLDER', folder.name, 'Moved folder to Trash');
 
       files.filter(f => f.folderId === id).forEach(f => {
         f.isDeleted = true;
@@ -151,6 +179,23 @@ module.exports = {
     return null;
   },
   getStarsByUser: (userId) => stars.filter(s => s.userId === userId),
+
+  attachStarState: (userId, files = [], folders = []) => {
+    const userStars = stars.filter(s => s.userId === userId);
+    const starredIds = new Set(userStars.map(s => s.resourceId));
+
+    const decoratedFiles = files.map(f => ({
+      ...f,
+      isStarred: starredIds.has(f.id)
+    }));
+
+    const decoratedFolders = folders.map(f => ({
+      ...f,
+      isStarred: starredIds.has(f.id)
+    }));
+
+    return { files: decoratedFiles, folders: decoratedFolders };
+  },
 
   // Search & Filter helper with pagination
   searchUserResources: (ownerId, { q, type, starred, limit = 20, offset = 0 }) => {

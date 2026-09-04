@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../config/db');
+const storageService = require('../config/storage');
 
 // Create Folder
 exports.createFolder = async (req, res) => {
@@ -51,12 +52,14 @@ exports.createFolder = async (req, res) => {
 // Get Root Folders & Files or All Folders
 exports.getFolders = async (req, res) => {
   try {
-    const rootFolders = db.findSubfolders(null, req.user.id);
-    const rootFiles = db.findFilesInFolder(null, req.user.id);
+    const rawFolders = db.findSubfolders(null, req.user.id);
+    const rawFiles = db.findFilesInFolder(null, req.user.id);
+    const filesWithUrls = storageService.attachDownloadUrl(rawFiles);
+    const decorated = db.attachStarState(req.user.id, filesWithUrls, rawFolders);
 
     return res.json({
-      folders: rootFolders,
-      files: rootFiles
+      folders: decorated.folders,
+      files: decorated.files
     });
   } catch (error) {
     console.error('Get Folders Error:', error);
@@ -78,15 +81,17 @@ exports.getFolderById = async (req, res) => {
       });
     }
 
-    const subfolders = db.findSubfolders(id, req.user.id);
-    const files = db.findFilesInFolder(id, req.user.id);
+    const rawSubfolders = db.findSubfolders(id, req.user.id);
+    const rawFiles = db.findFilesInFolder(id, req.user.id);
+    const filesWithUrls = storageService.attachDownloadUrl(rawFiles);
+    const decorated = db.attachStarState(req.user.id, filesWithUrls, rawSubfolders);
     const path = db.getBreadcrumbs(id, req.user.id);
 
     return res.json({
       folder,
       children: {
-        folders: subfolders,
-        files
+        folders: decorated.folders,
+        files: decorated.files
       },
       path
     });
