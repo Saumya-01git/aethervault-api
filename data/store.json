@@ -1,0 +1,19 @@
+{
+  "users": [
+    {
+      "id": "8f85049c-41f0-4427-871b-b2fc37f4b26a",
+      "name": "Test User",
+      "email": "test_1788556225163@example.com",
+      "passwordHash": "$2b$10$H3plcOYOBRBQoX67xOcCj.DiKx6d3Gjp96cpdIStb6/KOZIBffZc2",
+      "createdAt": "2026-09-04T21:10:25.362Z",
+      "updatedAt": "2026-09-04T21:10:25.615Z"
+    }
+  ],
+  "files": [],
+  "folders": [],
+  "shares": [],
+  "linkShares": [],
+  "stars": [],
+  "fileVersions": [],
+  "activityLogs": []
+}

@@ -1,4 +1,7 @@
-// Database service (Supports in-memory fallback & PostgreSQL connection)
+const fs = require('fs');
+const path = require('path');
+const { Pool } = require('pg');
+
 const users = [];
 const files = [];
 const folders = [];
@@ -7,6 +10,59 @@ const linkShares = [];
 const stars = [];
 const fileVersions = [];
 const activityLogs = [];
+
+const STORE_PATH = path.join(__dirname, '../../data/store.json');
+
+// Automatic Local Disk Store Persistence (NEVER loses data on restart)
+const loadFromDisk = () => {
+  try {
+    if (fs.existsSync(STORE_PATH)) {
+      const raw = fs.readFileSync(STORE_PATH, 'utf8');
+      if (raw.trim()) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.users)) users.push(...data.users);
+        if (Array.isArray(data.files)) files.push(...data.files);
+        if (Array.isArray(data.folders)) folders.push(...data.folders);
+        if (Array.isArray(data.shares)) shares.push(...data.shares);
+        if (Array.isArray(data.linkShares)) linkShares.push(...data.linkShares);
+        if (Array.isArray(data.stars)) stars.push(...data.stars);
+        if (Array.isArray(data.fileVersions)) fileVersions.push(...data.fileVersions);
+        if (Array.isArray(data.activityLogs)) activityLogs.push(...data.activityLogs);
+        console.log(`📦 Data persistent store loaded (${files.length} files, ${folders.length} folders, ${users.length} users)`);
+      }
+    }
+  } catch (err) {
+    console.error('Error loading store.json:', err);
+  }
+};
+
+const saveToDisk = () => {
+  try {
+    const dir = path.dirname(STORE_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const payload = { users, files, folders, shares, linkShares, stars, fileVersions, activityLogs };
+    fs.writeFileSync(STORE_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving store.json:', err);
+  }
+};
+
+// Initial load on startup
+loadFromDisk();
+
+// Optional Neon PostgreSQL Pool setup
+let pgPool = null;
+if (process.env.DATABASE_URL) {
+  try {
+    pgPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    console.log('🐘 Neon PostgreSQL connected via DATABASE_URL');
+  } catch (err) {
+    console.error('Failed to initialize PostgreSQL pool:', err);
+  }
+}
 
 module.exports = {
   users,
@@ -23,12 +79,13 @@ module.exports = {
     const entry = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
       userId,
-      action, // e.g. 'UPLOAD_FILE', 'CREATE_FOLDER', 'DELETE_FILE', 'RESTORE_ITEM', 'STAR_ITEM', 'UPDATE_PROFILE'
+      action,
       resourceName,
       details,
       timestamp: new Date().toISOString()
     };
     activityLogs.unshift(entry);
+    saveToDisk();
     return entry;
   },
 
@@ -41,12 +98,14 @@ module.exports = {
   findUserById: (id) => users.find(u => u.id === id),
   createUser: (userData) => {
     users.push(userData);
+    saveToDisk();
     return userData;
   },
   updateUser: (id, updates) => {
     const user = users.find(u => u.id === id);
     if (user) {
       Object.assign(user, updates, { updatedAt: new Date().toISOString() });
+      saveToDisk();
     }
     return user;
   },
@@ -57,6 +116,7 @@ module.exports = {
     if (fileData.ownerId) {
       module.exports.logActivity(fileData.ownerId, 'UPLOAD_FILE', fileData.name, `Uploaded file (${(fileData.sizeBytes / 1024).toFixed(1)} KB)`);
     }
+    saveToDisk();
     return fileData;
   },
   findFileById: (id) => files.find(f => f.id === id && !f.isDeleted),
@@ -66,6 +126,7 @@ module.exports = {
     const file = files.find(f => f.id === id);
     if (file) {
       Object.assign(file, updates, { updatedAt: new Date().toISOString() });
+      saveToDisk();
     }
     return file;
   },
@@ -75,6 +136,7 @@ module.exports = {
       file.isDeleted = true;
       file.deletedAt = new Date().toISOString();
       module.exports.logActivity(file.ownerId, 'DELETE_FILE', file.name, 'Moved file to Trash');
+      saveToDisk();
     }
     return file;
   },
@@ -85,6 +147,7 @@ module.exports = {
     if (folderData.ownerId) {
       module.exports.logActivity(folderData.ownerId, 'CREATE_FOLDER', folderData.name, 'Created new folder');
     }
+    saveToDisk();
     return folderData;
   },
   findFolderById: (id) => folders.find(f => f.id === id && !f.isDeleted),
@@ -94,6 +157,7 @@ module.exports = {
     const folder = folders.find(f => f.id === id);
     if (folder) {
       Object.assign(folder, updates, { updatedAt: new Date().toISOString() });
+      saveToDisk();
     }
     return folder;
   },
@@ -112,6 +176,7 @@ module.exports = {
       folders.filter(f => f.parentId === id).forEach(f => {
         module.exports.softDeleteFolder(f.id);
       });
+      saveToDisk();
     }
     return folder;
   },
@@ -134,6 +199,7 @@ module.exports = {
   // Per-User Share operations (ACL)
   createShare: (shareData) => {
     shares.push(shareData);
+    saveToDisk();
     return shareData;
   },
   findSharesByResource: (resourceType, resourceId) => shares.filter(s => s.resourceType === resourceType && s.resourceId === resourceId),
@@ -141,7 +207,9 @@ module.exports = {
   deleteShare: (id) => {
     const index = shares.findIndex(s => s.id === id);
     if (index !== -1) {
-      return shares.splice(index, 1)[0];
+      const removed = shares.splice(index, 1)[0];
+      saveToDisk();
+      return removed;
     }
     return null;
   },
@@ -149,6 +217,7 @@ module.exports = {
   // Public Link Share operations
   createLinkShare: (linkData) => {
     linkShares.push(linkData);
+    saveToDisk();
     return linkData;
   },
   findLinkShareByToken: (token) => linkShares.find(l => l.token === token),
@@ -156,7 +225,9 @@ module.exports = {
   deleteLinkShare: (id) => {
     const index = linkShares.findIndex(l => l.id === id);
     if (index !== -1) {
-      return linkShares.splice(index, 1)[0];
+      const removed = linkShares.splice(index, 1)[0];
+      saveToDisk();
+      return removed;
     }
     return null;
   },
@@ -167,6 +238,7 @@ module.exports = {
     if (!exists) {
       const entry = { userId, resourceType, resourceId, createdAt: new Date().toISOString() };
       stars.push(entry);
+      saveToDisk();
       return entry;
     }
     return null;
@@ -174,7 +246,9 @@ module.exports = {
   removeStar: (userId, resourceType, resourceId) => {
     const index = stars.findIndex(s => s.userId === userId && s.resourceType === resourceType && s.resourceId === resourceId);
     if (index !== -1) {
-      return stars.splice(index, 1)[0];
+      const removed = stars.splice(index, 1)[0];
+      saveToDisk();
+      return removed;
     }
     return null;
   },
@@ -251,6 +325,7 @@ module.exports = {
       if (file) {
         file.isDeleted = false;
         delete file.deletedAt;
+        saveToDisk();
         return file;
       }
     } else if (resourceType === 'folder') {
@@ -258,7 +333,6 @@ module.exports = {
       if (folder) {
         folder.isDeleted = false;
         delete folder.deletedAt;
-        // Restore child files and subfolders
         files.filter(f => f.folderId === resourceId).forEach(f => {
           f.isDeleted = false;
           delete f.deletedAt;
@@ -266,6 +340,7 @@ module.exports = {
         folders.filter(f => f.parentId === resourceId).forEach(f => {
           module.exports.restoreItem('folder', f.id, ownerId);
         });
+        saveToDisk();
         return folder;
       }
     }
@@ -275,15 +350,19 @@ module.exports = {
   purgeItem: (resourceType, resourceId, ownerId) => {
     if (resourceType === 'file') {
       const idx = files.findIndex(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
-      if (idx !== -1) return files.splice(idx, 1)[0];
+      if (idx !== -1) {
+        const deleted = files.splice(idx, 1)[0];
+        saveToDisk();
+        return deleted;
+      }
     } else if (resourceType === 'folder') {
       const idx = folders.findIndex(f => f.id === resourceId && f.ownerId === ownerId && f.isDeleted);
       if (idx !== -1) {
         const deleted = folders.splice(idx, 1)[0];
-        // Delete child files
         for (let i = files.length - 1; i >= 0; i--) {
           if (files[i].folderId === resourceId) files.splice(i, 1);
         }
+        saveToDisk();
         return deleted;
       }
     }
@@ -294,6 +373,8 @@ module.exports = {
   getFileVersions: (fileId) => fileVersions.filter(v => v.fileId === fileId),
   addFileVersion: (versionData) => {
     fileVersions.push(versionData);
+    saveToDisk();
     return versionData;
   }
 };
+
