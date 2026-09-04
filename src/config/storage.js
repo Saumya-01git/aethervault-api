@@ -17,8 +17,8 @@ const storageService = {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
       return `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET || 'aethervault'}/${storageKey}`;
     }
-    // Fallback: Local file server URL
-    return `http://localhost:${process.env.PORT || 8080}/uploads/${storageKey}`;
+    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
+    return `${baseUrl}/uploads/${storageKey}`;
   },
 
   // Get public/signed URL for a file (Synchronous helper)
@@ -27,7 +27,8 @@ const storageService = {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
       return `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET || 'aethervault'}/${storageKey}`;
     }
-    return `http://localhost:${process.env.PORT || 8080}/uploads/${storageKey}`;
+    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
+    return `${baseUrl}/uploads/${storageKey}`;
   },
 
   // Decorate a single file object or array of file objects with downloadUrl
