@@ -13,7 +13,7 @@ const activityLogs = [];
 
 const STORE_PATH = path.join(__dirname, '../../data/store.json');
 
-// Automatic Local Disk Store Persistence (NEVER loses data on restart)
+// Automatic Local Disk Store Persistence
 const loadFromDisk = () => {
   try {
     if (fs.existsSync(STORE_PATH)) {
@@ -47,7 +47,7 @@ const saveToDisk = () => {
   }
 };
 
-// Initial load on startup
+// Initial load from local disk
 loadFromDisk();
 
 // Optional Neon PostgreSQL Pool setup
@@ -60,7 +60,7 @@ if (process.env.DATABASE_URL) {
     });
     console.log('🐘 Neon PostgreSQL connected via DATABASE_URL');
 
-    // Auto-create SQL Tables if missing
+    // Auto-create SQL Tables if missing & sync DB state to memory
     (async () => {
       try {
         const client = await pgPool.connect();
@@ -131,7 +131,42 @@ if (process.env.DATABASE_URL) {
               created_at TIMESTAMPTZ DEFAULT NOW()
             );
           `);
-          console.log('🐘 Neon PostgreSQL database tables verified & ready!');
+          console.log('🐘 Neon PostgreSQL database tables verified!');
+
+          // Sync database contents into memory
+          const uRes = await client.query('SELECT * FROM users');
+          if (uRes.rows.length > 0) {
+            users.length = 0;
+            users.push(...uRes.rows.map(r => ({
+              id: r.id, name: r.name, email: r.email, password: r.password, role: r.role, avatarUrl: r.avatar_url, createdAt: r.created_at, updatedAt: r.updated_at
+            })));
+          }
+
+          const folRes = await client.query('SELECT * FROM folders WHERE is_deleted = false');
+          if (folRes.rows.length > 0) {
+            folders.length = 0;
+            folders.push(...folRes.rows.map(r => ({
+              id: r.id, name: r.name, parentId: r.parent_id, ownerId: r.owner_id, isDeleted: r.is_deleted, createdAt: r.created_at, updatedAt: r.updated_at
+            })));
+          }
+
+          const filRes = await client.query('SELECT * FROM files WHERE is_deleted = false');
+          if (filRes.rows.length > 0) {
+            files.length = 0;
+            files.push(...filRes.rows.map(r => ({
+              id: r.id, name: r.name, sizeBytes: parseInt(r.size_bytes || 0), mimeType: r.mime_type, storageKey: r.storage_key, downloadUrl: r.download_url, folderId: r.folder_id, ownerId: r.owner_id, isDeleted: r.is_deleted, createdAt: r.created_at, updatedAt: r.updated_at
+            })));
+          }
+
+          const starRes = await client.query('SELECT * FROM stars');
+          if (starRes.rows.length > 0) {
+            stars.length = 0;
+            stars.push(...starRes.rows.map(r => ({
+              userId: r.user_id, resourceType: r.resource_type, resourceId: r.resource_id, createdAt: r.created_at
+            })));
+          }
+
+          console.log(`⚡ Neon PostgreSQL sync complete: ${users.length} users, ${folders.length} folders, ${files.length} files loaded!`);
         } finally {
           client.release();
         }
@@ -143,6 +178,17 @@ if (process.env.DATABASE_URL) {
     console.error('Failed to initialize PostgreSQL pool:', err);
   }
 }
+
+// SQL Helper Executers
+const runPgQuery = async (query, params = []) => {
+  if (!pgPool) return null;
+  try {
+    return await pgPool.query(query, params);
+  } catch (err) {
+    console.error('PostgreSQL Query Error:', err.message);
+    return null;
+  }
+};
 
 module.exports = {
   users,
@@ -166,6 +212,12 @@ module.exports = {
     };
     activityLogs.unshift(entry);
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO activity_logs (id, user_id, action, resource_name, details, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
+      [entry.id, entry.userId, entry.action, entry.resourceName, entry.details, entry.timestamp]
+    );
+
     return entry;
   },
 
@@ -179,6 +231,12 @@ module.exports = {
   createUser: (userData) => {
     users.push(userData);
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO users (id, name, email, password, role, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (email) DO NOTHING',
+      [userData.id, userData.name, userData.email, userData.password, userData.role || 'user', userData.createdAt, userData.updatedAt]
+    );
+
     return userData;
   },
   updateUser: (id, updates) => {
@@ -186,6 +244,11 @@ module.exports = {
     if (user) {
       Object.assign(user, updates, { updatedAt: new Date().toISOString() });
       saveToDisk();
+
+      runPgQuery(
+        'UPDATE users SET name = $1, avatar_url = $2, updated_at = $3 WHERE id = $4',
+        [user.name, user.avatarUrl, user.updatedAt, id]
+      );
     }
     return user;
   },
@@ -197,6 +260,12 @@ module.exports = {
       module.exports.logActivity(fileData.ownerId, 'UPLOAD_FILE', fileData.name, `Uploaded file (${(fileData.sizeBytes / 1024).toFixed(1)} KB)`);
     }
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO files (id, name, size_bytes, mime_type, storage_key, download_url, folder_id, owner_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [fileData.id, fileData.name, fileData.sizeBytes || 0, fileData.mimeType, fileData.storageKey, fileData.downloadUrl, fileData.folderId || null, fileData.ownerId, fileData.createdAt, fileData.updatedAt]
+    );
+
     return fileData;
   },
   findFileById: (id) => files.find(f => f.id === id && !f.isDeleted),
@@ -207,6 +276,11 @@ module.exports = {
     if (file) {
       Object.assign(file, updates, { updatedAt: new Date().toISOString() });
       saveToDisk();
+
+      runPgQuery(
+        'UPDATE files SET name = $1, folder_id = $2, updated_at = $3 WHERE id = $4',
+        [file.name, file.folderId || null, file.updatedAt, id]
+      );
     }
     return file;
   },
@@ -217,6 +291,11 @@ module.exports = {
       file.deletedAt = new Date().toISOString();
       module.exports.logActivity(file.ownerId, 'DELETE_FILE', file.name, 'Moved file to Trash');
       saveToDisk();
+
+      runPgQuery(
+        'UPDATE files SET is_deleted = TRUE, deleted_at = $1 WHERE id = $2',
+        [file.deletedAt, id]
+      );
     }
     return file;
   },
@@ -228,6 +307,12 @@ module.exports = {
       module.exports.logActivity(folderData.ownerId, 'CREATE_FOLDER', folderData.name, 'Created new folder');
     }
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO folders (id, name, parent_id, owner_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)',
+      [folderData.id, folderData.name, folderData.parentId || null, folderData.ownerId, folderData.createdAt, folderData.updatedAt]
+    );
+
     return folderData;
   },
   findFolderById: (id) => folders.find(f => f.id === id && !f.isDeleted),
@@ -238,6 +323,11 @@ module.exports = {
     if (folder) {
       Object.assign(folder, updates, { updatedAt: new Date().toISOString() });
       saveToDisk();
+
+      runPgQuery(
+        'UPDATE folders SET name = $1, parent_id = $2, updated_at = $3 WHERE id = $4',
+        [folder.name, folder.parentId || null, folder.updatedAt, id]
+      );
     }
     return folder;
   },
@@ -257,6 +347,15 @@ module.exports = {
         module.exports.softDeleteFolder(f.id);
       });
       saveToDisk();
+
+      runPgQuery(
+        'UPDATE folders SET is_deleted = TRUE, deleted_at = $1 WHERE id = $2',
+        [folder.deletedAt, id]
+      );
+      runPgQuery(
+        'UPDATE files SET is_deleted = TRUE, deleted_at = $1 WHERE folder_id = $2',
+        [folder.deletedAt, id]
+      );
     }
     return folder;
   },
@@ -280,6 +379,12 @@ module.exports = {
   createShare: (shareData) => {
     shares.push(shareData);
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO shares (id, resource_type, resource_id, shared_with_email, permission, owner_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [shareData.id, shareData.resourceType, shareData.resourceId, shareData.sharedWithEmail, shareData.permission || 'read', shareData.ownerId, shareData.createdAt]
+    );
+
     return shareData;
   },
   findSharesByResource: (resourceType, resourceId) => shares.filter(s => s.resourceType === resourceType && s.resourceId === resourceId),
@@ -289,6 +394,8 @@ module.exports = {
     if (index !== -1) {
       const removed = shares.splice(index, 1)[0];
       saveToDisk();
+
+      runPgQuery('DELETE FROM shares WHERE id = $1', [id]);
       return removed;
     }
     return null;
@@ -319,6 +426,12 @@ module.exports = {
       const entry = { userId, resourceType, resourceId, createdAt: new Date().toISOString() };
       stars.push(entry);
       saveToDisk();
+
+      runPgQuery(
+        'INSERT INTO stars (user_id, resource_type, resource_id, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+        [userId, resourceType, resourceId, entry.createdAt]
+      );
+
       return entry;
     }
     return null;
@@ -328,6 +441,12 @@ module.exports = {
     if (index !== -1) {
       const removed = stars.splice(index, 1)[0];
       saveToDisk();
+
+      runPgQuery(
+        'DELETE FROM stars WHERE user_id = $1 AND resource_type = $2 AND resource_id = $3',
+        [userId, resourceType, resourceId]
+      );
+
       return removed;
     }
     return null;
@@ -406,6 +525,12 @@ module.exports = {
         file.isDeleted = false;
         delete file.deletedAt;
         saveToDisk();
+
+        runPgQuery(
+          'UPDATE files SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1',
+          [resourceId]
+        );
+
         return file;
       }
     } else if (resourceType === 'folder') {
@@ -421,6 +546,16 @@ module.exports = {
           module.exports.restoreItem('folder', f.id, ownerId);
         });
         saveToDisk();
+
+        runPgQuery(
+          'UPDATE folders SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1',
+          [resourceId]
+        );
+        runPgQuery(
+          'UPDATE files SET is_deleted = FALSE, deleted_at = NULL WHERE folder_id = $1',
+          [resourceId]
+        );
+
         return folder;
       }
     }
@@ -433,6 +568,8 @@ module.exports = {
       if (idx !== -1) {
         const deleted = files.splice(idx, 1)[0];
         saveToDisk();
+
+        runPgQuery('DELETE FROM files WHERE id = $1', [resourceId]);
         return deleted;
       }
     } else if (resourceType === 'folder') {
@@ -443,6 +580,9 @@ module.exports = {
           if (files[i].folderId === resourceId) files.splice(i, 1);
         }
         saveToDisk();
+
+        runPgQuery('DELETE FROM files WHERE folder_id = $1', [resourceId]);
+        runPgQuery('DELETE FROM folders WHERE id = $1', [resourceId]);
         return deleted;
       }
     }
@@ -457,4 +597,3 @@ module.exports = {
     return versionData;
   }
 };
-
