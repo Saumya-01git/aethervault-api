@@ -17,7 +17,10 @@ const PORT = process.env.PORT || 8080;
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin or any origin in production
+    return callback(null, true);
+  },
   credentials: true
 }));
 app.use(express.json());
