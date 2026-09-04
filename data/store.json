@@ -7,6 +7,14 @@
       "passwordHash": "$2b$10$H3plcOYOBRBQoX67xOcCj.DiKx6d3Gjp96cpdIStb6/KOZIBffZc2",
       "createdAt": "2026-09-04T21:10:25.362Z",
       "updatedAt": "2026-09-04T21:10:25.615Z"
+    },
+    {
+      "id": "a9e280fb-1050-45da-841c-ed77b97ef8bf",
+      "name": "Test User",
+      "email": "test_1788556478578@example.com",
+      "passwordHash": "$2b$10$n4p6tVhwkJ9vqN6NGoVOoOJTlUZgyVs7WauBXrP/4urmHdiRWinFm",
+      "createdAt": "2026-09-04T21:14:38.797Z",
+      "updatedAt": "2026-09-04T21:14:39.047Z"
     }
   ],
   "files": [],

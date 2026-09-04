@@ -59,6 +59,86 @@ if (process.env.DATABASE_URL) {
       ssl: { rejectUnauthorized: false }
     });
     console.log('🐘 Neon PostgreSQL connected via DATABASE_URL');
+
+    // Auto-create SQL Tables if missing
+    (async () => {
+      try {
+        const client = await pgPool.connect();
+        try {
+          await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              email TEXT UNIQUE NOT NULL,
+              password TEXT NOT NULL,
+              role TEXT DEFAULT 'user',
+              avatar_url TEXT,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS folders (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              parent_id TEXT,
+              owner_id TEXT NOT NULL,
+              is_deleted BOOLEAN DEFAULT FALSE,
+              deleted_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS files (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              size_bytes BIGINT DEFAULT 0,
+              mime_type TEXT,
+              storage_key TEXT,
+              download_url TEXT,
+              folder_id TEXT,
+              owner_id TEXT NOT NULL,
+              is_deleted BOOLEAN DEFAULT FALSE,
+              deleted_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS stars (
+              id SERIAL PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              resource_type TEXT NOT NULL,
+              resource_id TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE(user_id, resource_type, resource_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS activity_logs (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              action TEXT NOT NULL,
+              resource_name TEXT,
+              details TEXT,
+              timestamp TIMESTAMPTZ DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS shares (
+              id TEXT PRIMARY KEY,
+              resource_type TEXT NOT NULL,
+              resource_id TEXT NOT NULL,
+              shared_with_email TEXT NOT NULL,
+              permission TEXT DEFAULT 'read',
+              owner_id TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+          `);
+          console.log('🐘 Neon PostgreSQL database tables verified & ready!');
+        } finally {
+          client.release();
+        }
+      } catch (tableErr) {
+        console.error('Error initializing PostgreSQL tables:', tableErr.message);
+      }
+    })();
   } catch (err) {
     console.error('Failed to initialize PostgreSQL pool:', err);
   }
