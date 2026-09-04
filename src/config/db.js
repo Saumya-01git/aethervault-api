@@ -23,6 +23,13 @@ module.exports = {
     users.push(userData);
     return userData;
   },
+  updateUser: (id, updates) => {
+    const user = users.find(u => u.id === id);
+    if (user) {
+      Object.assign(user, updates, { updatedAt: new Date().toISOString() });
+    }
+    return user;
+  },
 
   // File operations
   createFile: (fileData) => {

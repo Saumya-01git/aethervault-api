@@ -54,6 +54,15 @@ describe('AetherVault API Test Suite', () => {
     expect(res.body).toHaveProperty('token');
   });
 
+  test('POST /api/auth/register - Reject invalid numeric name (e.g. 123)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ name: '123', email: 'numeric@example.com', password: 'Password123!' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_NAME');
+  });
+
   test('GET /api/auth/me - Get user profile with token', async () => {
     const res = await request(app)
       .get('/api/auth/me')
@@ -61,5 +70,15 @@ describe('AetherVault API Test Suite', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.user.name).toBe(testUser.name);
+  });
+
+  test('PUT /api/auth/password - Update user password', async () => {
+    const res = await request(app)
+      .put('/api/auth/password')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ currentPassword: testUser.password, newPassword: 'NewPassword123!' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toContain('Password updated successfully');
   });
 });
