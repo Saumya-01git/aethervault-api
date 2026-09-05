@@ -250,6 +250,26 @@ module.exports = {
     return entry;
   },
 
+  addActivityLog: (userId, action, resourceName = '', details = '') => {
+    const entry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      userId,
+      action,
+      resourceName,
+      details,
+      timestamp: new Date().toISOString()
+    };
+    activityLogs.unshift(entry);
+    saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO activity_logs (id, user_id, action, resource_name, details, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
+      [entry.id, entry.userId, entry.action, entry.resourceName, entry.details, entry.timestamp]
+    );
+
+    return entry;
+  },
+
   getActivityLogs: (userId, limit = 50) => {
     return activityLogs.filter(log => log.userId === userId).slice(0, limit);
   },
