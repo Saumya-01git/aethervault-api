@@ -200,14 +200,14 @@ exports.getSharedWithMe = async (req, res) => {
         const file = db.findFileById(share.resourceId);
         if (file && !file.isDeleted) {
           const fileWithUrl = storageService.attachDownloadUrl([file])[0];
-          const decorated = db.attachStarState(req.user.id, [fileWithUrl], [])[0];
-          sharedFiles.push({ ...decorated, shareRole: share.role || share.permission });
+          const decorated = db.attachStarState(req.user.id, [fileWithUrl], []);
+          sharedFiles.push({ ...decorated.files[0], shareRole: share.role || share.permission });
         }
       } else if (share.resourceType === 'folder') {
         const folder = db.findFolderById(share.resourceId);
         if (folder && !folder.isDeleted) {
-          const decorated = db.attachStarState(req.user.id, [], [folder])[0];
-          sharedFolders.push({ ...decorated, shareRole: share.role || share.permission });
+          const decorated = db.attachStarState(req.user.id, [], [folder]);
+          sharedFolders.push({ ...decorated.folders[0], shareRole: share.role || share.permission });
         }
       }
     }
