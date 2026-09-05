@@ -388,6 +388,11 @@ module.exports = {
     return shareData;
   },
   findSharesByResource: (resourceType, resourceId) => shares.filter(s => s.resourceType === resourceType && s.resourceId === resourceId),
+  findSharesForUser: (userEmail, userId) => shares.filter(s => 
+    (s.granteeEmail && s.granteeEmail.toLowerCase() === (userEmail || '').toLowerCase()) ||
+    (s.sharedWithEmail && s.sharedWithEmail.toLowerCase() === (userEmail || '').toLowerCase()) ||
+    (s.granteeUserId && s.granteeUserId === userId)
+  ),
   findShareById: (id) => shares.find(s => s.id === id),
   deleteShare: (id) => {
     const index = shares.findIndex(s => s.id === id);

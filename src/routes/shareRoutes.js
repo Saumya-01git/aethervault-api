@@ -11,6 +11,7 @@ router.get('/link/:token', shareController.resolvePublicLink);
 router.use(authMiddleware);
 
 // User ACL Sharing
+router.get('/shared-with-me', shareController.getSharedWithMe);
 router.post('/', shareController.createShare);
 router.get('/:resourceType/:resourceId', shareController.listShares);
 router.delete('/:id', shareController.deleteShare);

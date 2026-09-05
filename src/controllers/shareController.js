@@ -165,6 +165,8 @@ exports.createPublicLink = async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
+    db.createLinkShare(newLink);
+
     const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
     const shareUrl = `${baseUrl}/api/shares/link/${token}`;
 
@@ -182,6 +184,42 @@ exports.createPublicLink = async (req, res) => {
     console.error('Create Public Link Error:', error);
     return res.status(500).json({
       error: { code: 'SERVER_ERROR', message: 'Failed to create public share link.' }
+    });
+  }
+};
+
+// Get Items Shared With Me (ACL)
+exports.getSharedWithMe = async (req, res) => {
+  try {
+    const userShares = db.findSharesForUser(req.user.email, req.user.id);
+    const sharedFiles = [];
+    const sharedFolders = [];
+
+    for (const share of userShares) {
+      if (share.resourceType === 'file') {
+        const file = db.findFileById(share.resourceId);
+        if (file && !file.isDeleted) {
+          const fileWithUrl = storageService.attachDownloadUrl([file])[0];
+          const decorated = db.attachStarState(req.user.id, [fileWithUrl], [])[0];
+          sharedFiles.push({ ...decorated, shareRole: share.role || share.permission });
+        }
+      } else if (share.resourceType === 'folder') {
+        const folder = db.findFolderById(share.resourceId);
+        if (folder && !folder.isDeleted) {
+          const decorated = db.attachStarState(req.user.id, [], [folder])[0];
+          sharedFolders.push({ ...decorated, shareRole: share.role || share.permission });
+        }
+      }
+    }
+
+    return res.json({
+      folders: sharedFolders,
+      files: sharedFiles
+    });
+  } catch (error) {
+    console.error('Get Shared With Me Error:', error);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Failed to fetch shared items.' }
     });
   }
 };
@@ -240,6 +278,11 @@ exports.resolvePublicLink = async (req, res) => {
       return res.status(404).json({
         error: { code: 'NOT_FOUND', message: 'Shared resource is no longer available.' }
       });
+    }
+
+    // Direct browser redirect for non-password GET links
+    if (req.method === 'GET' && !linkShare.hasPassword && downloadUrl) {
+      return res.redirect(downloadUrl);
     }
 
     return res.json({
