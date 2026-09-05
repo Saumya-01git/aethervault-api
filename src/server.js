@@ -24,6 +24,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files statically in local dev
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
