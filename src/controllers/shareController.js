@@ -165,9 +165,8 @@ exports.createPublicLink = async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    db.createLinkShare(newLink);
-
-    const shareUrl = `http://localhost:${process.env.PORT || 8080}/api/shares/link/${token}`;
+    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
+    const shareUrl = `${baseUrl}/api/shares/link/${token}`;
 
     return res.status(201).json({
       message: 'Public share link created successfully',

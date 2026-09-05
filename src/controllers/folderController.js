@@ -57,9 +57,13 @@ exports.getFolders = async (req, res) => {
     const filesWithUrls = storageService.attachDownloadUrl(rawFiles);
     const decorated = db.attachStarState(req.user.id, filesWithUrls, rawFolders);
 
+    const allUserFiles = db.findFilesByOwner(req.user.id);
+    const totalBytes = allUserFiles.reduce((acc, f) => acc + parseInt(f.sizeBytes || 0), 0);
+
     return res.json({
       folders: decorated.folders,
-      files: decorated.files
+      files: decorated.files,
+      totalBytes
     });
   } catch (error) {
     console.error('Get Folders Error:', error);
@@ -87,17 +91,25 @@ exports.getFolderById = async (req, res) => {
     const decorated = db.attachStarState(req.user.id, filesWithUrls, rawSubfolders);
     const path = db.getBreadcrumbs(id, req.user.id);
 
+    const allUserFiles = db.findFilesByOwner(req.user.id);
+    const totalBytes = allUserFiles.reduce((acc, f) => acc + parseInt(f.sizeBytes || 0), 0);
+
     return res.json({
       folder,
       children: {
         folders: decorated.folders,
         files: decorated.files
       },
-      path
+      path,
+      totalBytes
     });
   } catch (error) {
     console.error('Get Folder By ID Error:', error);
     return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Failed to retrieve folder details.' }
+    });
+  }
+};
       error: { code: 'SERVER_ERROR', message: 'Failed to retrieve folder details.' }
     });
   }
