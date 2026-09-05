@@ -228,26 +228,70 @@ exports.getSharedWithMe = async (req, res) => {
 exports.resolvePublicLink = async (req, res) => {
   try {
     const { token } = req.params;
-    const { password } = req.body || {};
+    const password = req.body?.password || req.body?.linkPassword || req.query?.password;
 
     const linkShare = db.findLinkShareByToken(token);
 
     if (!linkShare) {
-      return res.status(404).json({
-        error: { code: 'NOT_FOUND', message: 'Invalid or expired share link.' }
-      });
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="UTF-8"><title>AetherVault - Link Not Found</title>
+        <style>body{background:#030712;color:#f8fafc;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .card{background:#0f172a;border:1px solid rgba(239,68,68,0.3);padding:2.5rem;border-radius:1.5rem;max-width:400px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);}
+        h2{color:#f87171;margin-top:0;}p{color:#94a3b8;font-size:0.9rem;}</style></head>
+        <body><div class="card"><h2>⚠️ Link Invalid or Expired</h2><p>This public share link is no longer active or does not exist.</p></div></body></html>
+      `);
     }
 
     // Check expiration
     if (linkShare.expiresAt && new Date(linkShare.expiresAt) < new Date()) {
-      return res.status(410).json({
-        error: { code: 'EXPIRED', message: 'This share link has expired.' }
-      });
+      return res.status(410).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="UTF-8"><title>AetherVault - Link Expired</title>
+        <style>body{background:#030712;color:#f8fafc;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .card{background:#0f172a;border:1px solid rgba(245,158,11,0.3);padding:2.5rem;border-radius:1.5rem;max-width:400px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);}
+        h2{color:#fbbf24;margin-top:0;}p{color:#94a3b8;font-size:0.9rem;}</style></head>
+        <body><div class="card"><h2>⌛ Link Expired</h2><p>This share link expired on ${new Date(linkShare.expiresAt).toLocaleDateString()}.</p></div></body></html>
+      `);
     }
 
     // Check password protection
     if (linkShare.hasPassword) {
       if (!password) {
+        if (req.method === 'GET' || req.headers['accept']?.includes('text/html')) {
+          return res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>AetherVault - Protected Link</title>
+              <style>
+                body { background: #030712; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
+                .card { background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 27, 75, 0.8)); border: 1px solid rgba(56, 189, 248, 0.3); padding: 2.5rem; border-radius: 1.5rem; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.7); }
+                .icon { width: 56px; height: 56px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 1rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.5rem; }
+                h2 { margin: 0 0 0.5rem; color: #f8fafc; font-size: 1.5rem; }
+                p { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.4; }
+                input { width: 100%; padding: 0.875rem 1rem; margin-bottom: 1rem; border-radius: 0.875rem; border: 1px solid rgba(255,255,255,0.15); background: rgba(15, 23, 42, 0.8); color: white; box-sizing: border-box; font-size: 0.95rem; outline: none; }
+                input:focus { border-color: #38bdf8; box-shadow: 0 0 15px rgba(56,189,248,0.3); }
+                button { width: 100%; padding: 0.875rem 1rem; border-radius: 0.875rem; border: none; background: linear-gradient(135deg, #2563eb, #0284c7); color: white; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 20px rgba(37,99,235,0.4); }
+                button:hover { transform: translateY(-1px); box-shadow: 0 6px 25px rgba(56,189,248,0.6); }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">🔒</div>
+                <h2>Password Protected File</h2>
+                <p>This AetherVault cloud resource is password protected. Enter the password below to unlock.</p>
+                <form method="POST" action="/api/shares/link/${token}">
+                  <input type="password" name="password" placeholder="Enter link password" required autofocus />
+                  <button type="submit">Unlock & View Resource</button>
+                </form>
+              </div>
+            </body>
+            </html>
+          `);
+        }
         return res.status(401).json({
           error: { code: 'PASSWORD_REQUIRED', message: 'Password is required to access this link.' }
         });
@@ -255,6 +299,16 @@ exports.resolvePublicLink = async (req, res) => {
 
       const isMatch = await bcrypt.compare(password, linkShare.passwordHash);
       if (!isMatch) {
+        if (req.method === 'POST' && req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
+          return res.status(401).send(`
+            <!DOCTYPE html>
+            <html lang="en"><head><meta charset="UTF-8"><title>AetherVault - Invalid Password</title>
+            <style>body{background:#030712;color:#f8fafc;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+            .card{background:#0f172a;border:1px solid rgba(239,68,68,0.3);padding:2.5rem;border-radius:1.5rem;max-width:400px;text-align:center;}
+            h2{color:#f87171;}a{color:#38bdf8;text-decoration:none;font-weight:bold;}</style></head>
+            <body><div class="card"><h2>❌ Incorrect Password</h2><p>The password you entered is incorrect.</p><p><a href="/api/shares/link/${token}">← Try Again</a></p></div></body></html>
+          `);
+        }
         return res.status(401).json({
           error: { code: 'INVALID_PASSWORD', message: 'Incorrect password for share link.' }
         });
@@ -280,8 +334,8 @@ exports.resolvePublicLink = async (req, res) => {
       });
     }
 
-    // Direct browser redirect for non-password GET links
-    if (req.method === 'GET' && !linkShare.hasPassword && downloadUrl) {
+    // Direct browser redirect for non-password GET links or unlocked form POST links
+    if (downloadUrl && (req.method === 'GET' || req.headers['content-type']?.includes('application/x-www-form-urlencoded'))) {
       return res.redirect(downloadUrl);
     }
 

@@ -130,6 +130,19 @@ if (process.env.DATABASE_URL) {
               owner_id TEXT NOT NULL,
               created_at TIMESTAMPTZ DEFAULT NOW()
             );
+
+            CREATE TABLE IF NOT EXISTS link_shares (
+              id TEXT PRIMARY KEY,
+              resource_type TEXT NOT NULL,
+              resource_id TEXT NOT NULL,
+              token TEXT UNIQUE NOT NULL,
+              role TEXT DEFAULT 'viewer',
+              has_password BOOLEAN DEFAULT FALSE,
+              password_hash TEXT,
+              expires_at TIMESTAMPTZ,
+              created_by TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            );
           `);
           console.log('🐘 Neon PostgreSQL database tables verified!');
 
@@ -166,7 +179,23 @@ if (process.env.DATABASE_URL) {
             })));
           }
 
-          console.log(`⚡ Neon PostgreSQL sync complete: ${users.length} users, ${folders.length} folders, ${files.length} files loaded!`);
+          const shareRes = await client.query('SELECT * FROM shares');
+          if (shareRes.rows.length > 0) {
+            shares.length = 0;
+            shares.push(...shareRes.rows.map(r => ({
+              id: r.id, resourceType: r.resource_type, resourceId: r.resource_id, sharedWithEmail: r.shared_with_email, granteeEmail: r.shared_with_email, permission: r.permission, role: r.permission, ownerId: r.owner_id, createdBy: r.owner_id, createdAt: r.created_at
+            })));
+          }
+
+          const linkRes = await client.query('SELECT * FROM link_shares');
+          if (linkRes.rows.length > 0) {
+            linkShares.length = 0;
+            linkShares.push(...linkRes.rows.map(r => ({
+              id: r.id, resourceType: r.resource_type, resourceId: r.resource_id, token: r.token, role: r.role, hasPassword: r.has_password, passwordHash: r.password_hash, expiresAt: r.expires_at, createdBy: r.created_by, createdAt: r.created_at
+            })));
+          }
+
+          console.log(`⚡ Neon PostgreSQL sync complete: ${users.length} users, ${folders.length} folders, ${files.length} files, ${shares.length} shares, ${linkShares.length} linkShares loaded!`);
         } finally {
           client.release();
         }
@@ -410,6 +439,12 @@ module.exports = {
   createLinkShare: (linkData) => {
     linkShares.push(linkData);
     saveToDisk();
+
+    runPgQuery(
+      'INSERT INTO link_shares (id, resource_type, resource_id, token, role, has_password, password_hash, expires_at, created_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [linkData.id, linkData.resourceType, linkData.resourceId, linkData.token, linkData.role || 'viewer', linkData.hasPassword || false, linkData.passwordHash || null, linkData.expiresAt || null, linkData.createdBy, linkData.createdAt]
+    );
+
     return linkData;
   },
   findLinkShareByToken: (token) => linkShares.find(l => l.token === token),
@@ -419,6 +454,8 @@ module.exports = {
     if (index !== -1) {
       const removed = linkShares.splice(index, 1)[0];
       saveToDisk();
+
+      runPgQuery('DELETE FROM link_shares WHERE id = $1', [id]);
       return removed;
     }
     return null;

@@ -17,7 +17,7 @@ const storageService = {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
       return `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET || 'aethervault'}/${storageKey}`;
     }
-    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
+    const baseUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://aethervault-api.onrender.com';
     return `${baseUrl}/uploads/${storageKey}`;
   },
 
@@ -27,7 +27,7 @@ const storageService = {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
       return `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_STORAGE_BUCKET || 'aethervault'}/${storageKey}`;
     }
-    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`;
+    const baseUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://aethervault-api.onrender.com';
     return `${baseUrl}/uploads/${storageKey}`;
   },
 
