@@ -28,6 +28,15 @@ app.use(express.json());
 // Serve uploaded files statically in local dev
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Root Endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: '🚀 AetherVault Backend API is running smoothly!',
+    health: '/api/health',
+    status: 'online'
+  });
+});
+
 // Health Check (Public route)
 app.get('/api/health', (req, res) => {
   res.json({
