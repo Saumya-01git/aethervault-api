@@ -110,10 +110,6 @@ exports.getFolderById = async (req, res) => {
     });
   }
 };
-      error: { code: 'SERVER_ERROR', message: 'Failed to retrieve folder details.' }
-    });
-  }
-};
 
 // Rename or Move Folder (PATCH)
 exports.updateFolder = async (req, res) => {
