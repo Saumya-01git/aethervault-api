@@ -433,6 +433,13 @@ exports.resolvePublicLink = async (req, res) => {
       downloadUrl,
       owner: { name: owner.name, email: owner.email }
     });
+  } catch (error) {
+    console.error('Resolve Public Link Error:', error);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Failed to resolve share link.' }
+    });
+  }
+};
 
 // Delete Public Link Share
 exports.deletePublicLink = async (req, res) => {
